@@ -4,6 +4,12 @@ import io
 import re
 import string
 import argparse
+import fileinput
+
+from functools import partial
+from textwrap import fill as wrap
+from itertools import islice
+
 try:
     from cStringIO import StringIO
 except ImportError:
@@ -11,6 +17,11 @@ except ImportError:
         from io import StringIO
     except ImportError:
         from StringIO import StringIO
+
+try:
+    from itertools import imap as map
+except ImportError:
+    pass
 
 __version__ = '1.00'
 
@@ -61,6 +72,23 @@ def loadcow(file, thoughts, eyes, tongue):
         cow = cow.strip('\r\n')
         return cow.format(thoughts=thoughts, eyes=eyes, tongue=tongue)
 
+def make_ballon(lines, think=False):
+    maxlen = max(map(len, lines)) + 2
+    format = ('{left} {text:' + str(maxlen - 2) + 's} {right}').format
+    yield ' {} '.format('_' * maxlen)
+    if think:
+        for line in lines:
+            yield format(left='(', right=')', text=line)
+    elif len(lines) < 2:
+        yield format(left='<', right='>', # You never know what's passed in
+                     text=lines[0] if len(lines) == 1 else ' ' * (maxlen - 2))
+    else:
+        yield format(left='/', right='\\', text=lines[0])
+        for line in islice(lines, 1, len(lines) - 1):
+            yield format(left='|', right='|', text=line)
+        yield format(left='\\', right='/', text=lines[-1])
+    yield ' {} '.format('-' * maxlen)
+
 def main(prog):
     eyes = 'oo'
     tongue = '  '
@@ -79,8 +107,11 @@ def main(prog):
     parser.add_argument('-y', '--young',    action='store_const', dest='eyes', const='..')
     parser.add_argument('-e', '--eyes',     action='store', dest='eyes')
     parser.add_argument('-f', '--file',     action='store', dest='file', default='default.cow')
-    parser.add_argument('--tongue',         action='store', dest='tongue')
+    parser.add_argument('-T', '--tongue',   action='store', dest='tongue')
+    parser.add_argument('-E', '--encoding', action='store', dest='encoding', default='utf-8')
+    parser.add_argument('-W', '--wrap',     action='store', type=int, dest='wrap', default=70)
     parser.add_argument('--thoughts',       action='store', dest='thoughts')
+    parser.add_argument('files', metavar='FILES', nargs='*')
     
     args = parser.parse_args()
     if args.tongue is None:
@@ -91,7 +122,13 @@ def main(prog):
     args.eyes = (args.eyes + '  ')[:2]
     args.tongue = (args.tongue + '  ')[:2]
 
-    print loadcow(args.file, args.thoughts, args.eyes, args.tongue)
+    cow = loadcow(args.file, args.thoughts, args.eyes, args.tongue)
+    
+    input = fileinput.input(args.files, openhook=partial(io.open, encoding=args.encoding))
+    input = wrap(''.join(input), args.wrap, replace_whitespace=False).split('\n')
+    for line in make_ballon(input, args.thoughts == 'o'):
+        print line
+    print cow
 
 if __name__ == '__main__':
     main(sys.argv[0])
