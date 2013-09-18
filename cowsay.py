@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 import os
 import io
@@ -25,20 +27,35 @@ except ImportError:
 
 __version__ = '1.00'
 
-try:
-    cowpath = os.environ['COWPATH']
-except KeyError:
-    scriptdir = os.path.dirname(__file__)
-    for dir in ('../share/cows', '../usr/share/cows',
-                '/usr/share/cows', '/usr/local/share/cows',
-                'cows'):
-        path = os.path.join(scriptdir, dir)
-        if os.path.exists(path):
-            cowpath = path
-    del scriptdir, path, dir
 
-def loadcow(file, thoughts, eyes, tongue):
-    cow = io.open(os.path.join(cowpath, file), encoding='utf-8').read().strip()
+try:
+    cowpath = os.environ['COWPATH'].split(os.pathsep)
+except KeyError:
+    cowpath = []
+
+scriptdir = os.path.dirname(__file__)
+for dir in (os.path.expanduser('~/.cows'), os.path.expanduser('~/cows'),
+            '../share/cows', '../usr/share/cows',
+            '/usr/share/cows', '/usr/local/share/cows',
+            'cows'):
+    path = os.path.join(scriptdir, dir)
+    if os.path.isdir(path):
+        cowpath.append(path)
+del scriptdir, path, dir
+
+def findcow(file, path=cowpath):
+    if os.path.isabs(file):
+        return file
+    for dir in path:
+        check = os.path.join(dir, file)
+        if os.path.isfile(check):
+            return check
+    if file.endswith('.cow'):
+        raise ValueError('Cow exists not: ' + file)
+    return findcow(file + '.cow', path)
+
+def loadcow(file, thoughts, eyes, tongue, cowpath=cowpath):
+    cow = io.open(findcow(file, cowpath), encoding='utf-8').read().strip()
     # Strip comments
     file = StringIO(cow)
     cow = []
@@ -89,14 +106,15 @@ def make_ballon(lines, think=False):
         yield format(left='\\', right='/', text=lines[-1])
     yield ' {} '.format('-' * maxlen)
 
-def main(prog):
+def main(prog, out=sys.stdout):
     eyes = 'oo'
     tongue = '  '
     
-    parser = argparse.ArgumentParser(description='Python reimplementation of the classic cowsay')
+    parser = argparse.ArgumentParser(description='Python reimplementation of the classic cowsay.')
     parser.set_defaults(eyes='oo')
     parser.set_defaults(tongue=None)
     parser.set_defaults(thoughts='o' if 'think' in os.path.basename(__file__) else '\\')
+    parser.set_defaults(cowpath=cowpath[::-1])
     parser.add_argument('-b', '--borg',     action='store_const', dest='eyes', const='==')
     parser.add_argument('-d', '--dead',     action='store_const', dest='eyes', const='xx')
     parser.add_argument('-g', '--greedy',   action='store_const', dest='eyes', const='$$')
@@ -106,11 +124,23 @@ def main(prog):
     parser.add_argument('-w', '--wired',    action='store_const', dest='eyes', const='OO')
     parser.add_argument('-y', '--young',    action='store_const', dest='eyes', const='..')
     parser.add_argument('-e', '--eyes',     action='store', dest='eyes')
-    parser.add_argument('-f', '--file',     action='store', dest='file', default='default.cow')
     parser.add_argument('-T', '--tongue',   action='store', dest='tongue')
-    parser.add_argument('-E', '--encoding', action='store', dest='encoding', default='utf-8')
-    parser.add_argument('-W', '--wrap',     action='store', type=int, dest='wrap', default=70)
-    parser.add_argument('--thoughts',       action='store', dest='thoughts')
+    parser.add_argument('-l', '--list', action='store_true', dest='list',
+                        help='displays cow file location')
+    parser.add_argument('-f', '--file',     action='store', dest='file',
+                        default='default.cow', help='cow file, searches in cowpath. '
+                        '.cow is automatically appended')
+    parser.add_argument('-E', '--encoding', action='store', dest='encoding',
+                        default='utf-8', help='Encoding to use, utf-8 by default')
+    parser.add_argument('-W', '--wrap', action='store', type=int, dest='wrap',
+                        default=70, help='wraps the cow text, default 70')
+    parser.add_argument('--thoughts', action='store', dest='thoughts',
+                        help='the method of communication cow uses. '
+                        'Default to `o` if invoked as cowthink, otherwise \\')
+    parser.add_argument('-c', '--command-line', action='store_true', dest='cmd',
+                        help='treat command line as text, not files')
+    parser.add_argument('-a', '--add', '--add-cow', '--add-path',
+                        '--add-cow-path', action='append', dest='cowpath')
     parser.add_argument('files', metavar='FILES', nargs='*')
     
     args = parser.parse_args()
@@ -122,13 +152,28 @@ def main(prog):
     args.eyes = (args.eyes + '  ')[:2]
     args.tongue = (args.tongue + '  ')[:2]
 
-    cow = loadcow(args.file, args.thoughts, args.eyes, args.tongue)
+    args.cowpath.reverse()
+    if args.list:
+        try:
+            print(findcow(args.file, args.cowpath))
+        except ValueError as e:
+            sys.exit(e.message)
+        else:
+            sys.exit(0)
+    try:
+        cow = loadcow(args.file, args.thoughts, args.eyes, args.tongue, args.cowpath)
+    except ValueError as e:
+        sys.exit(e.message)
     
-    input = fileinput.input(args.files, openhook=partial(io.open, encoding=args.encoding))
-    input = wrap(''.join(input), args.wrap, replace_whitespace=False).split('\n')
+    if args.cmd:
+        input = '\n'.join(args.files)
+    else:
+        input = ''.join(fileinput.input(args.files,
+                openhook=partial(io.open, encoding=args.encoding)))
+    input = wrap(input, args.wrap, replace_whitespace=False).split('\n')
     for line in make_ballon(input, args.thoughts == 'o'):
-        print line
-    print cow
+        print(line, file=out)
+    print(cow, file=out)
 
 if __name__ == '__main__':
     main(sys.argv[0])
