@@ -91,20 +91,19 @@ def loadcow(file, thoughts, eyes, tongue, cowpath=cowpath):
 
 def make_ballon(lines, think=False):
     maxlen = max(map(len, lines)) + 2
-    format = ('{left} {text:' + str(maxlen - 2) + 's} {right}').format
-    yield ' {} '.format('_' * maxlen)
+    format = '%s %-' + str(maxlen - 2) + 's %s'
+    yield ' %s ' % ('_' * maxlen)
     if think:
         for line in lines:
-            yield format(left='(', right=')', text=line)
+            yield format % ('(', line, ')')
     elif len(lines) < 2:
-        yield format(left='<', right='>', # You never know what's passed in
-                     text=lines[0] if len(lines) == 1 else ' ' * (maxlen - 2))
+        yield format % ('<', lines[0] if lines else '', '>')
     else:
-        yield format(left='/', right='\\', text=lines[0])
+        yield format % ('/', lines[0], '\\')
         for line in islice(lines, 1, len(lines) - 1):
-            yield format(left='|', right='|', text=line)
-        yield format(left='\\', right='/', text=lines[-1])
-    yield ' {} '.format('-' * maxlen)
+            yield format % ('|', line, '|')
+        yield format % ('\\', lines[-1], '/')
+    yield ' %s ' % ('-' * maxlen)
 
 def main(prog, out=sys.stdout):
     eyes = 'oo'
