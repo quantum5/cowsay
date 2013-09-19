@@ -74,7 +74,8 @@ def loadcow(file, thoughts, eyes, tongue, cowpath=cowpath):
         end = re.compile('^' + re.escape(end) + '$', re.M).search(cow)
         if end is None:
             end = -1 # screw this, the whole cow it is
-        end = end.start()
+        else:
+            end = end.start()
         cow = cow[start:end].strip('\r\n')
         
         # The curse of compatiblity
