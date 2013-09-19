@@ -38,10 +38,11 @@ for dir in (os.path.expanduser('~/.cows'), os.path.expanduser('~/cows'),
             '../share/cows', '../usr/share/cows',
             '/usr/share/cows', '/usr/local/share/cows',
             'cows'):
-    path = os.path.join(scriptdir, dir)
-    if os.path.isdir(path):
-        cowpath.append(path)
-del scriptdir, path, dir
+    if not os.path.isabs(dir):
+        dir = os.path.join(scriptdir, dir)
+    if os.path.isdir(dir):
+        cowpath.append(dir)
+del scriptdir, dir
 
 def findcow(file, path=cowpath):
     if os.path.isabs(file):
