@@ -1,12 +1,12 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <regex>
 #include <vector>
 #include <algorithm>
 #include <functional>
 #include <cstdlib>
 #include <cctype>
+#include <cstring>
 #include "OptionParser.h"
 
 #ifdef WIN32
@@ -22,6 +22,17 @@
 #   include <pwd.h>
 #endif
 
+#ifdef _MSC_VER
+#   include <regex>
+#else
+#   include <boost/regex.hpp>
+namespace std {
+    using boost::regex;
+    using boost::regex_replace;
+    using boost::regex_search;
+    using boost::smatch;
+}
+#endif
 
 bool get_executable_directory(std::string &buffer) {
 #ifdef WIN32
@@ -147,18 +158,33 @@ std::string findcow(const std::vector<std::string> &cowpath, const std::string &
     return findcow(cowpath, cow + ".cow");
 }
 
-static inline std::string &ltrim(std::string &s) {
+static inline void ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+}
+
+static inline std::string &ltrim(std::string &&s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
     return s;
 }
 
-static inline std::string &rtrim(std::string &s) {
+static inline void rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+}
+
+static inline std::string &rtrim(std::string &&s) {
     s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
     return s;
 }
 
-static inline std::string &trim(std::string &s) {
-        return ltrim(rtrim(s));
+static inline void trim(std::string &s) {
+    ltrim(s);
+    rtrim(s);
+}
+
+static inline std::string &trim(std::string &&s) {
+    rtrim(s);
+    ltrim(s);
+    return s;
 }
 
 int isnewline(int ch) {
@@ -309,7 +335,7 @@ int main(int argc, char *argv[]) {
           .description("C++ reimplementation of the classic cowsay.");
     parser.set_defaults("eyes", "oo");
     parser.set_defaults("tongue", "");
-    parser.set_defaults("thoughts", strstr(argv[0], "think") ? "o" : "\\");
+    parser.set_defaults("thoughts", std::strstr(argv[0], "think") ? "o" : "\\");
     parser.add_option("-b", "--borg").    action("store_const").dest("eyes").set_const("==");
     parser.add_option("-d", "--dead").    action("store_const").dest("eyes").set_const("xx");
     parser.add_option("-g", "--greedy").  action("store_const").dest("eyes").set_const("$$");
