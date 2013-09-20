@@ -402,7 +402,13 @@ int main(int argc, char *argv[]) {
     std::string input;
     try {
         cow = loadcow(findcow(cowpath, options["file"]), options["thoughts"], eyes, tongue);
-        open_streams(input, args);
+        if (options.get("cmd")) {
+            std::stringstream stream;
+            for (auto line = args.cbegin(); line < args.cend(); ++line)
+                stream << *line << '\n';
+            input = stream.str();
+        } else
+            open_streams(input, args);
         int width = wrap(input, lines, options.get("wrap"));
         write_ballon(stdout, lines, width, options["thoughts"] == "o");
         fputs(cow.c_str(), stdout);
