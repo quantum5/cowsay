@@ -9,12 +9,14 @@ CXXFLAGS=-O0
 else
 CXXFLAGS=-O3
 endif
+LDFLAGS=-lboost_regex
 ifdef WIN32
 CXXFLAGS+=-DWIN32
-LDFLAGS=-lshlwapi
+LDFLAGS+=-lshlwapi
 SUFFIX=.exe
-else
-LDFLAGS=-lboost_regex
+endif
+ifdef STATIC
+LDFLAGS+=-static
 endif
 CXXFLAGS+=$(INCPATH) $(LIBPATH)
 

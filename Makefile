@@ -10,6 +10,9 @@ LIBS=shlwapi.lib
 cowsay.exe: cowsay.obj OptionParser.obj
 	$(CXX) $(CXXFLAGS) $** $(LIBS) /Fe$@
 
+upx: cowsay.exe
+	upx --best $**
+
 cowsay.cpp: OptionParser.h
 OptionParser.cpp: OptionParser.h
 
