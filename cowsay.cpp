@@ -287,7 +287,12 @@ int wrap(const std::string& input, std::vector<std::string>& result, size_t widt
         }
         line += input.substr(index, i - index) + " ";
         if (input[i] == '\n') {
+            rtrim(line);
+            if (line.length() > maxwidth)
+                maxwidth = line.length();
             result.push_back(line);
+            if (line.length() > maxwidth)
+                maxwidth = line.length();
             line.clear();
         }
         index = i + 1;
@@ -392,8 +397,6 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    /*for (auto i = cowpath.cbegin(); i < cowpath.cend(); ++i)
-        std::cout << *i << '\n';*/
     std::string cow;
     std::vector<std::string> lines;
     std::string input;
