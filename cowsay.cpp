@@ -247,21 +247,24 @@ void write_ballon(FILE *out, const std::vector<std::string> &lines, int width, b
 
 int wrap(const std::string& input, std::vector<std::string>& result, size_t width) {
     std::string line;
-    std::stringstream stream(input);
-    int maxwidth = 0;
-    while (stream) {
-        std::string word;
-        stream >> word;
-        if (!word.length())
-            continue;
-        if (line.length() + word.length() > width) {
+    size_t index = 0, maxwidth = 0;
+    while (index < input.length()) {
+        int i = input.find_first_of(" \t\n", index);
+        if (i == std::string::npos)
+            i = input.length() - 1;
+        if (line.length() + i - index > width) {
             rtrim(line);
             result.push_back(line);
             if (line.length() > maxwidth)
                 maxwidth = line.length();
             line.clear();
         }
-        line += word + " ";
+        line += input.substr(index, i - index) + " ";
+        if (input[i] == '\n') {
+            result.push_back(line);
+            line.clear();
+        }
+        index = i + 1;
     }
 
     if (!line.empty()) {
