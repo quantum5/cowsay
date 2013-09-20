@@ -245,25 +245,27 @@ void write_ballon(FILE *out, const std::vector<std::string> &lines, int width, b
     fprintf(out, " %s \n", std::string(width, '-').c_str());
 }
 
-int wrap(std::vector<std::istream>& inputs, std::vector<std::string>& result, size_t width) {
+int wrap(const std::string& input, std::vector<std::string>& result, size_t width) {
     std::string line;
+    std::stringstream stream(input);
     int maxwidth = 0;
-    for (auto i = inputs.begin(); i < inputs.end(); ++i) {
-        //do {
-        while (*i) {
-            std::string word;
-            *i >> word;
-            if (line.length() + word.length() > width) {
-                result.push_back(line);
-                if (line.length() > maxwidth)
-                    maxwidth = line.length();
-                line.clear();
-            }
-            line += word + " ";
-        }// while (*i);
+    while (stream) {
+        std::string word;
+        stream >> word;
+        if (!word.length())
+            continue;
+        if (line.length() + word.length() > width) {
+            rtrim(line);
+            result.push_back(line);
+            if (line.length() > maxwidth)
+                maxwidth = line.length();
+            line.clear();
+        }
+        line += word + " ";
     }
 
     if (!line.empty()) {
+        rtrim(line);
         result.push_back(line);
         if (line.length() > maxwidth)
             maxwidth = line.length();
@@ -271,27 +273,28 @@ int wrap(std::vector<std::istream>& inputs, std::vector<std::string>& result, si
     return maxwidth;
 }
 
-void open_streams(std::vector<std::istream>& streams, const std::vector<std::string> &files) {
+void open_streams(std::string &data, const std::vector<std::string> &files) {
     if (!files.size()) {
         std::stringstream stream;
         stream << std::cin.rdbuf();
-        stream.seekg(0);
-        streams.push_back(std::move(stream));
+        data = stream.str();
         return;
     }
+    data = "";
     for (auto file = files.cbegin(); file < files.cend(); ++file) {
         if (*file == "-") {
             std::stringstream stream;
             stream << std::cin.rdbuf();
-            stream.seekg(0);
-            streams.push_back(std::move(stream));
+            data += stream.str();
             continue;
         }
         std::ifstream stream;
         stream.exceptions(std::ifstream::badbit);
         try {
             stream.open(*file);
-            streams.push_back(std::move(stream));
+            std::stringstream string;
+            string << stream.rdbuf();
+            data += string.str();
         } catch (std::ifstream::failure e) {
             std::cerr << "Can't open file: " << *file << ": " << e.what() << std::endl;
         }
@@ -363,12 +366,12 @@ int main(int argc, char *argv[]) {
     /*for (auto i = cowpath.cbegin(); i < cowpath.cend(); ++i)
         std::cout << *i << '\n';*/
     std::string cow;
-    std::vector<std::istream> streams;
     std::vector<std::string> lines;
+    std::string input;
     try {
         cow = loadcow(findcow(cowpath, options["file"]), options["thoughts"], eyes, tongue);
-        open_streams(streams, args);
-        int width = wrap(streams, lines, options.get("wrap"));
+        open_streams(input, args);
+        int width = wrap(input, lines, options.get("wrap"));
         write_ballon(stdout, lines, width, options["thoughts"] == "o");
         fputs(cow.c_str(), stdout);
     } catch (std::string e) {
