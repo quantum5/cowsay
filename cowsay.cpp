@@ -1,8 +1,12 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <regex>
 #include <vector>
 #include <algorithm>
+#include <functional>
 #include <cstdlib>
+#include <cctype>
 #include "OptionParser.h"
 
 #ifdef WIN32
@@ -82,12 +86,11 @@ std::string expanduser(const std::string &path) {
 
 void add_cow_path_if_exists(std::vector<std::string> &cowpath, const std::string &path) {
 #ifdef WIN32
-    if (PathFileExists(path.c_str()))
+    if (PathIsDirectory(path.c_str()))
         cowpath.push_back(path);
-    std::cout << path << '\n';
 #else
     struct stat buf;
-    if (stat(path, &buf) == 0 && S_ISDIR(st.st_mode))
+    if (stat(path.c_str(), &buf) == 0 && S_ISDIR(buf.st_mode))
         cowpath.push_back(path);
 #endif
 }
@@ -104,6 +107,195 @@ void add_default_cowpath(std::vector<std::string> &cowpath) {
     add_cow_path_if_exists(cowpath, "/usr/share/cows");
     add_cow_path_if_exists(cowpath, "/usr/local/share/cows");
     add_cow_path_if_exists(cowpath, path + "/cows");
+}
+
+bool file_exist(const std::string &file) {
+#ifdef WIN32
+    return PathFileExists(file.c_str());
+#else
+    struct stat buf;
+    return stat(file.c_str(), &buf) == 0 && S_ISREG(buf.st_mode);
+#endif
+}
+
+bool endswith(std::string const &string, std::string const &ending) {
+    if (string.length() >= ending.length()) {
+        return !string.compare(string.length() - ending.length(), ending.length(), ending);
+    } else {
+        return false;
+    }
+}
+
+bool startswith(std::string const &string, std::string const &ending) {
+    if (string.length() >= ending.length()) {
+        return !string.compare(0, ending.length(), ending);
+    } else {
+        return false;
+    }
+}
+
+std::string findcow(const std::vector<std::string> &cowpath, const std::string &cow) {
+    if (file_exist(cow))
+        return cow;
+    for (auto i = cowpath.cbegin(); i < cowpath.cend(); ++i) {
+        std::string check = *i + "/" + cow;
+        if (file_exist(check))
+            return check;
+    }
+    if (endswith(cow, ".cow"))
+        throw std::string("Cow exists not: ") + cow;
+    return findcow(cowpath, cow + ".cow");
+}
+
+static inline std::string &ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+    return s;
+}
+
+static inline std::string &rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+    return s;
+}
+
+static inline std::string &trim(std::string &s) {
+        return ltrim(rtrim(s));
+}
+
+int isnewline(int ch) {
+    switch (ch) {
+        case '\r':
+        case '\n':
+        case '\f':
+            return 1;
+    }
+    return 0;
+}
+
+std::string loadcow(const std::string &file, const std::string &thoughts,
+                    const std::string &eyes, const std::string &tongue) {
+    if (!file_exist(file))
+        throw std::string("Can't find cow: ") + file;
+    std::string cow, buf;
+    
+    try {
+        std::ifstream cowfile(file);
+        if (!cowfile)
+            throw std::string("Can't open cow: ") + file;
+        cowfile.exceptions(std::ifstream::badbit);
+        while (std::getline(cowfile, buf))
+            if (!startswith(ltrim(std::string(buf)), "#"))
+                cow += buf + '\n';
+        cowfile.close();
+    } catch (std::ifstream::failure e) {
+        throw std::string("Can't open cow: ") + e.what();
+    }
+    
+    if (cow.find("$the_cow") != std::string::npos) {
+        // Perl format, 'tis because of thee that I need regex
+        std::regex cowstart("\\$the_cow\\s*=\\s*<<[\"']?(\\w+)[\"']?;?$");
+        std::smatch match;
+        if (!regex_search(cow, match, cowstart))
+            throw std::string("Can't find a perl cow declaration");
+        int start = match.position() + match.length(), end;
+        std::string heredoc = match.str(1);
+        const std::regex esc("[\\^\\.\\$\\|\\(\\)\\[\\]\\*\\+\\?\\/\\\\]");
+        const std::string escaped("\\\\\\1");
+        std::regex cowend("^" + std::regex_replace(heredoc, esc, escaped) + "$");
+        if (regex_search(cow, match, cowend))
+            end = match.position();
+        else
+            end = cow.length();
+        cow = cow.substr(start, end - start);
+        cow = std::regex_replace(cow, std::regex("\\$\\{?thoughts(?:\\}|\\b)"), thoughts);
+        cow = std::regex_replace(cow, std::regex("\\$\\{?eyes(?:\\}|\\b)"), eyes);
+        cow = std::regex_replace(cow, std::regex("\\$\\{?tongue(?:\\}|\\b)"), tongue);
+        replace(cow, "\\\\", "\\");
+        replace(cow, "\\@", "@");
+        cow.erase(cow.begin(), std::find_if(cow.begin(), cow.end(), std::not1(std::ptr_fun<int, int>(isnewline))));
+    } else {
+        // Now, my own cow format, just basic formatting
+        rtrim(cow);
+        replace(cow, "{thoughts}", thoughts);
+        replace(cow, "{eyes}", eyes);
+        replace(cow, "{tongue}", tongue);
+    }
+    return cow;
+}
+
+void write_ballon(FILE *out, const std::vector<std::string> &lines, int width, bool think=false) {
+    std::stringstream formatter;
+    formatter << "%c %-" << width << "s %c\n";
+    width += 2;
+    std::string format = formatter.str();
+    fprintf(out, " %s \n", std::string(width, '_').c_str());
+    if (think) {
+        for (auto line = lines.cbegin(); line < lines.cend(); ++line)
+            fprintf(out, format.c_str(), '(', line->c_str(), ')');
+    } else if (lines.size() < 2) {
+        fprintf(out, format.c_str(), '<', lines.size() ? lines[0].c_str() : "", '>');
+    } else {
+        auto line = lines.cbegin();
+        auto end = lines.cend();
+        --end;
+        fprintf(out, format.c_str(), '/', (line++)->c_str(), '\\');
+        for (; line < end; ++line)
+            fprintf(out, format.c_str(), '|', line->c_str(), '|');
+        fprintf(out, format.c_str(), '\\', line->c_str(), '/');
+    }
+    fprintf(out, " %s \n", std::string(width, '-').c_str());
+}
+
+int wrap(std::vector<std::istream>& inputs, std::vector<std::string>& result, size_t width) {
+    std::string line;
+    int maxwidth = 0;
+    for (auto i = inputs.begin(); i < inputs.end(); ++i) {
+        //do {
+        while (*i) {
+            std::string word;
+            *i >> word;
+            if (line.length() + word.length() > width) {
+                result.push_back(line);
+                if (line.length() > maxwidth)
+                    maxwidth = line.length();
+                line.clear();
+            }
+            line += word + " ";
+        }// while (*i);
+    }
+
+    if (!line.empty()) {
+        result.push_back(line);
+        if (line.length() > maxwidth)
+            maxwidth = line.length();
+    }
+    return maxwidth;
+}
+
+void open_streams(std::vector<std::istream>& streams, const std::vector<std::string> &files) {
+    if (!files.size()) {
+        std::stringstream stream;
+        stream << std::cin.rdbuf();
+        stream.seekg(0);
+        streams.push_back(std::move(stream));
+        return;
+    }
+    for (auto file = files.cbegin(); file < files.cend(); ++file) {
+        if (*file == "-") {
+            std::stringstream stream;
+            stream << std::cin.rdbuf();
+            stream.seekg(0);
+            streams.push_back(std::move(stream));
+            continue;
+        }
+        std::ifstream stream;
+        stream.exceptions(std::ifstream::badbit);
+        try {
+            stream.open(*file);
+            streams.push_back(std::move(stream));
+        } catch (std::ifstream::failure e) {
+            std::cerr << "Can't open file: " << *file << ": " << e.what() << std::endl;
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -127,13 +319,11 @@ int main(int argc, char *argv[]) {
     parser.add_option("-f", "--file").action("store").dest("file")
                      .set_default("default.cow").help("cow file, searches in cowpath. "
                       ".cow is automatically appended");
-    parser.add_option("-E", "--encoding").action("store").dest("encoding")
-                     .set_default("utf-8").help("Encoding to use, utf-8 by default");
     parser.add_option("-W", "--wrap").action("store").type("int").dest("wrap")
                      .set_default(70).help("wraps the cow text, default 70");
     parser.add_option("--thoughts").action("store").dest("thoughts")
                      .help("the method of communication cow uses. "
-                      "Default to `o` if invoked as cowthink, otherwise \\");
+                      "Default to `o` if invoked as cowthink, otherwise `\\`");
     parser.add_option("-c", "--command-line").action("store_true").dest("cmd")
                      .help("treat command line as text, not files");
     std::string cowpath_opts[5] = {"-a", "--add", "--add-cow", "--add-path", "--add-cow-path"};
@@ -146,6 +336,42 @@ int main(int argc, char *argv[]) {
     std::reverse(cowpath.begin(), cowpath.end());
     add_default_cowpath(cowpath);
     
-    for (auto i = cowpath.cbegin(); i < cowpath.cend(); ++i)
-        std::cout << *i << '\n';
+    std::string tongue, eyes;
+    eyes = (options["eyes"] + "  ").substr(0, 2);
+    if (options["tongue"].empty()) {
+        if (eyes == "xx" || eyes == "**") // one of the predefined dead faces
+            tongue = "U ";
+        else
+            tongue = "  ";
+    } else
+        tongue = (options["tongue"] + "  ").substr(0, 2);
+    
+    if (options.is_set("list")) {
+        try {
+            std::string path = findcow(cowpath, options["file"]);
+#ifdef WIN32
+            replace(path, "/", "\\");
+#endif
+            std::cout << path << std::endl;
+            return 0;
+        } catch (std::string e) {
+            std::cerr << argv[0] << ": " << e << std::endl;
+            return 1;
+        }
+    }
+    
+    /*for (auto i = cowpath.cbegin(); i < cowpath.cend(); ++i)
+        std::cout << *i << '\n';*/
+    std::string cow;
+    std::vector<std::istream> streams;
+    std::vector<std::string> lines;
+    try {
+        cow = loadcow(findcow(cowpath, options["file"]), options["thoughts"], eyes, tongue);
+        open_streams(streams, args);
+        int width = wrap(streams, lines, options.get("wrap"));
+        write_ballon(stdout, lines, width, options["thoughts"] == "o");
+        fputs(cow.c_str(), stdout);
+    } catch (std::string e) {
+        std::cerr << argv[0] << ": " << e << std::endl;
+    }
 }
