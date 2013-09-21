@@ -1,5 +1,5 @@
 CXX?=g++
-LDFLAGS=-lboost_regex
+LDFLAGS:=-lboost_regex
 
 ifdef OLDGCC
   CZZ := $(CXX) -std=c++0x
@@ -11,6 +11,7 @@ ifdef DEBUG
   CXXFLAGS:=-O0
 else
   CXXFLAGS:=-O3
+  LDFLAGS+=-s
 endif
 
 ifdef WIN32
