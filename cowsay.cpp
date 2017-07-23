@@ -225,7 +225,7 @@ std::string loadcow(const std::string &file, const std::string &thoughts,
 
     if (cow.find("$the_cow") != std::string::npos) {
         // Perl format, 'tis because of thee that I need regex
-        std::regex cowstart("\\$the_cow\\s*=\\s*<<[\"']?(\\w+)[\"']?;?$");
+        std::regex cowstart("\\$the_cow\\s*=\\s*<<[\"']?(\\w+)[\"']?;?");
         std::smatch match;
         if (!regex_search(cow, match, cowstart))
             throw std::string("Can't find a perl cow declaration");
@@ -233,7 +233,7 @@ std::string loadcow(const std::string &file, const std::string &thoughts,
         std::string heredoc = match.str(1);
         const std::regex esc("[\\^\\.\\$\\|\\(\\)\\[\\]\\*\\+\\?\\/\\\\]");
         const std::string escaped("\\\\\\1");
-        std::regex cowend("^" + std::regex_replace(heredoc, esc, escaped) + "$");
+        std::regex cowend("[\r\n]*" + std::regex_replace(heredoc, esc, escaped) + "[\r\n]+");
         if (regex_search(cow, match, cowend))
             end = match.position();
         else
@@ -245,6 +245,8 @@ std::string loadcow(const std::string &file, const std::string &thoughts,
         replace(cow, "\\\\", "\\");
         replace(cow, "\\@", "@");
         cow.erase(cow.begin(), std::find_if(cow.begin(), cow.end(), std::not1(std::ptr_fun<int, int>(isnewline))));
+        if (!cow.empty() && !isnewline(cow.length() - 1))
+            cow.push_back('\n');
     } else {
         // Now, my own cow format, just basic formatting
         rtrim(cow);
