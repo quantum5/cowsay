@@ -22,7 +22,14 @@
 #   include <pwd.h>
 #endif
 
-#ifdef _MSC_VER
+#ifdef __GNUC__
+#   define GCC_VERSION (__GNUC__ * 10000 \
+                       + __GNUC_MINOR__ * 100 \
+                       + __GNUC_PATCHLEVEL__)
+#endif
+
+#if (defined(_MSC_VER) && _MSC_VER >= 1600) || \
+    (defined(GCC_VERSION) && GCC_VERSION >= 40900)
 #   include <regex>
 #else
 #   include <boost/regex.hpp>
@@ -68,10 +75,10 @@ void replace(std::string &string, const std::string &find, const std::string &re
 
 std::string get_home_directory() {
     static std::string home;
-    
+
     if (!home.empty())
         return home;
-    
+
     char *env = getenv("HOME");
     if (env)
         return home = env;
@@ -79,7 +86,7 @@ std::string get_home_directory() {
     env = getenv("USERPROFILE");
     if (env)
         return home = env;
-    
+
     home = getenv("HOMEDRIVE");
     home += getenv("HOMEPATH");
     return home;
@@ -110,7 +117,7 @@ void add_default_cowpath(std::vector<std::string> &cowpath) {
     std::string path;
     if (!get_executable_directory(path))
         return;
-    
+
     add_cow_path_if_exists(cowpath, expanduser("~/.cows"));
     add_cow_path_if_exists(cowpath, expanduser("~/cows"));
     add_cow_path_if_exists(cowpath, path + "/../share/cows");
@@ -202,7 +209,7 @@ std::string loadcow(const std::string &file, const std::string &thoughts,
     if (!file_exist(file))
         throw std::string("Can't find cow: ") + file;
     std::string cow, buf;
-    
+
     try {
         std::ifstream cowfile(file);
         if (!cowfile)
@@ -215,7 +222,7 @@ std::string loadcow(const std::string &file, const std::string &thoughts,
     } catch (std::ifstream::failure e) {
         throw std::string("Can't open cow: ") + e.what();
     }
-    
+
     if (cow.find("$the_cow") != std::string::npos) {
         // Perl format, 'tis because of thee that I need regex
         std::regex cowstart("\\$the_cow\\s*=\\s*<<[\"']?(\\w+)[\"']?;?$");
