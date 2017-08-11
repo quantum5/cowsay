@@ -1,10 +1,16 @@
 CXX=cl /nologo
+
 !IFDEF DEBUG
 CXXFLAGS=/Od
 !ELSE
 CXXFLAGS=/Ox
 !ENDIF
-CXXFLAGS=$(CXXFLAGS) /Zi /EHsc /DWIN32
+
+!IFNDEF NOPDB
+CXXFLAGS=$(CXXFLAGS) /Zi
+!ENDIF
+
+CXXFLAGS=$(CXXFLAGS) /EHsc /DWIN32
 LIBS=shlwapi.lib
 
 cowsay.exe: cowsay.obj OptionParser.obj
